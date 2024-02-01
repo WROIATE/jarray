@@ -1,110 +1,104 @@
 package jarray
 
-import (
-	"encoding/json"
-	"sync"
-)
+import "sort"
 
-type SyncList[T any] struct {
-	slice []T
-	lock  *sync.RWMutex
+type List[T any] interface {
+	Add(value T)
+	Remove(index int)
+	Get(index int) T
+	Set(index int, value T)
+	Append(value []T)
+	ToSlice() []T
+	Size() int
+	Clear()
+	Contains(value T, equals func(a, b T) bool) bool
+	Sort(less func(i, j int, sortSlice []T) bool)
 }
 
-// NewSyncList make a new sync list
-func NewSyncList[T any]() *SyncList[T] {
-	return &SyncList[T]{
+type SimpleList[T any] struct {
+	slice    []T
+	lessFunc func(i, j int, sortSlice []T) bool
+}
+
+func (s *SimpleList[T]) Len() int {
+	return s.Size()
+}
+
+func (s *SimpleList[T]) Less(i, j int) bool {
+	if s.lessFunc == nil {
+		return true
+	}
+	return s.lessFunc(i, j, s.slice)
+}
+
+func (s *SimpleList[T]) Swap(i, j int) {
+	s.slice[i], s.slice[j] = s.slice[j], s.slice[i]
+}
+
+func NewSimpleList[T any]() *SimpleList[T] {
+	return &SimpleList[T]{
 		slice: make([]T, 0, 8),
-		lock:  &sync.RWMutex{},
 	}
 }
 
-// ToSyncList package slice to sync list
-func ToSyncList[T, B any](slice []B) *SyncList[T] {
-	list := make([]T, len(slice))
-	copyLock := &sync.Mutex{}
-	copyLock.Lock()
-	defer copyLock.Unlock()
-	for i, v := range slice {
-		switch any(v).(type) {
-		case T:
-			list[i] = any(v).(T)
-		case string:
-			d, err := unmarshalJson[T]([]byte(any(v).(string)))
-			if err != nil {
-				return nil
-			}
-			list[i] = d
-		default:
-			bytes, err := json.Marshal(v)
-			if err != nil {
-				return nil
-			}
-			d, err := unmarshalJson[T](bytes)
-			if err != nil {
-				return nil
-			}
-			list[i] = d
-		}
+func ToSimpleList[T any](slice []T) *SimpleList[T] {
+	if len(slice) == 0 {
+		return NewSimpleList[T]()
 	}
-	return &SyncList[T]{
-		slice: list,
-		lock:  &sync.RWMutex{},
+	copySlice := make([]T, len(slice), len(slice)+8)
+	copy(copySlice, slice)
+	return &SimpleList[T]{
+		slice: copySlice,
 	}
 }
 
-func unmarshalJson[T any](b []byte) (v T, err error) {
-	return v, json.Unmarshal(b, &v)
-}
-
-// Add a value into list end
-func (s *SyncList[T]) Add(value T) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *SimpleList[T]) Add(value T) {
 	s.slice = append(s.slice, value)
 }
 
-// Append slice into list end
-func (s *SyncList[T]) Append(value []T) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *SimpleList[T]) Remove(index int) {
+	s.slice = append(s.slice[0:index], s.slice[index+1:]...)
+}
+
+func (s *SimpleList[T]) Get(index int) T {
+	return s.slice[index]
+}
+
+func (s *SimpleList[T]) Set(index int, value T) {
+	s.slice[index] = value
+}
+
+func (s *SimpleList[T]) Append(value []T) {
 	s.slice = append(s.slice, value...)
 }
 
-// Remove index value
-func (s *SyncList[T]) Remove(index int) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.slice = append(s.slice[0:index], s.slice[index+1:]...)
-	return nil
+func (s *SimpleList[T]) Size() int {
+	return len(s.slice)
 }
 
-// Get index value
-func (s *SyncList[T]) Get(index int) (T, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.slice[index], nil
-}
-
-// Set index value
-func (s *SyncList[T]) Set(value T, index int) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.slice[index] = value
-	return nil
-}
-
-// ToSlice return a new slice with list value
-func (s *SyncList[T]) ToSlice() []T {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+func (s *SimpleList[T]) ToSlice() []T {
 	slice := make([]T, len(s.slice))
 	copy(slice, s.slice)
 	return slice
 }
 
-// Size return list length
-func (s *SyncList[T]) Size() int {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return len(s.slice)
+func (s *SimpleList[T]) Clear() {
+	s.slice = make([]T, 0, 8)
+}
+
+func (s *SimpleList[T]) Contains(value T, equals func(a, b T) bool) bool {
+	for _, v := range s.slice {
+		if equals(v, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SimpleList[T]) Sort(less func(i, j int, sortSlice []T) bool) {
+	if less == nil {
+		return
+	}
+	s.lessFunc = less
+	sort.Sort(s)
 }
