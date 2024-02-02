@@ -4,6 +4,10 @@ import "sync"
 
 type Slice[T any] []T
 
+func EmptySlice[T any]() Slice[T] {
+	return make(Slice[T], 0)
+}
+
 func RangeSlice[T any](slice []T) Slice[T] {
 	return slice
 }
