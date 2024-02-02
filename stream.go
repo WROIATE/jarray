@@ -43,6 +43,7 @@ type StreamStart[T, B any] interface {
 }
 
 type StreamFlow[T, B any] interface {
+	StreamEnd[B]
 	Range(rangeFunc[T]) StreamFlow[T, B]
 	Distinct(f func(T) int64) StreamFlow[T, B]
 	Filter(f conditionFunc[T]) StreamFlow[T, B]
